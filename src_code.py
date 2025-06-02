@@ -85,9 +85,11 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-def MSE_loss_fn(y_preds, y_actual):
-    sum = np.mean((y_preds.flatten() - y_actual.flatten()) ** 2)
-    sum = sum / int(y_preds.flatten().size)
+def MSE_loss_fn(y_preds, y_actual, num_classes=10):
+    # loss = np.mean((y_preds.flatten() - y_actual.flatten()) ** 2)
+
+    loss = np.sum((y_preds - y_actual) ** 2, axis=1) / num_classes
+    return np.mean(loss)
 
 
 def Cross_Entropy_loss():
@@ -95,11 +97,14 @@ def Cross_Entropy_loss():
 
 
 def modify_y(y, num_classes):
-    new_y = np.zeroes((y.size, num_classes))
-    for i in y.size:
+    new_y = np.zeros((y.size, num_classes))
+    for i in range(y.size):
         new_y[i][y[i]] = 1
     return new_y
 
 
 model = NeuralNet()
-model.forward(train_x[0:10])
+y_preds = model.forward(train_x[0:10])
+
+train_y = modify_y(train_y, 10)
+validation_y_2 = modify_y(validation_y, 10)
