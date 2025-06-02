@@ -66,12 +66,11 @@ def Softmax(x):
     # m = np.max(x)  # to handle overflow when x has large values
     # sum = np.sum(np.exp(x - m))
     # return np.exp(x - m) / sum
-    
-    #With Batches
-    m = np.max(x, axis=1, keepdims=True)
-    sum = np.sum(np.exp(x-m), axis=1, keepdims=True)
-    return np.exp(x-m) / sum
 
+    # With Batches
+    m = np.max(x, axis=1, keepdims=True)
+    sum = np.sum(np.exp(x - m), axis=1, keepdims=True)
+    return np.exp(x - m) / sum
 
 
 def ReLu(x):
@@ -87,13 +86,20 @@ def sigmoid(x):
 
 
 def MSE_loss_fn(y_preds, y_actual):
-    
-    return
+    sum = np.mean((y_preds.flatten() - y_actual.flatten()) ** 2)
+    sum = sum / int(y_preds.flatten().size)
+
 
 def Cross_Entropy_loss():
     return
 
 
+def modify_y(y, num_classes):
+    new_y = np.zeroes((y.size, num_classes))
+    for i in y.size:
+        new_y[i][y[i]] = 1
+    return new_y
+
 
 model = NeuralNet()
-model.forward(train_x)[0
+model.forward(train_x[0:10])
