@@ -69,7 +69,7 @@ class NeuralNet:
 
     def backpropogation(self, y_actual, y_preds, train_x):
         dl_dz = (
-            (y_actual - y_preds) / y_preds.shape[0]
+            (y_preds - y_actual) / y_preds.shape[0]
         )  # (32x10)#dividing by batch size to get normalized loss (do not scale with batch_size)
 
         # for output layer 64 -> 10
@@ -89,7 +89,7 @@ class NeuralNet:
         dl_dz = dl_da * derivative_ReLu(self.hidden_layer1.a)  # (32x64)
         dl_dw = self.input_layer.a.T @ dl_dz
         dl_db = dl_dz.sum(axis=0)
-        dl_da = dl_dz @ self.hidden_layer1.weight.T
+        dl_da = dl_dz @ self.hidden_layer1.weights.T
 
         self.hidden_layer1.weights = (
             self.hidden_layer1.weights - self.learning_rate * dl_dw
@@ -162,4 +162,7 @@ y_preds = model.forward(train_x[0:20])
 train_y = modify_y(train_y, 10)
 validation_y_2 = modify_y(validation_y, 10)
 
-Cross_Entropy_loss(y_preds, train_y[0:20])
+y_preds = model.forward(train_x[0:20])
+model.backpropogation(train_y[0:20], y_preds, train_x[0:20])
+loss = Cross_Entropy_loss(y_preds, train_y[0:20])
+print(f"Loss: {loss}")
