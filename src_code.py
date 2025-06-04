@@ -45,7 +45,7 @@ class Linear_Layer:
 
 class NeuralNet:
     def __init__(
-        self, input_shape=784, output_shape=10, hidden_layer=64, learning_rate=0.01
+        self, input_shape=784, output_shape=10, hidden_layer=64, learning_rate=0.001
     ):
         self.input_shape = input_shape
         self.output_shape = output_shape
@@ -156,13 +156,53 @@ def modify_y(y, num_classes):
     return new_y
 
 
+def calculate_accuracy(y_preds, y_actual):
+    labels = y_preds.argmax(axis=1)
+    tlabels = y_actual.argmax(axis=1)
+
+    return np.mean((labels == tlabels).astype(float))
+
+
 model = NeuralNet()
 y_preds = model.forward(train_x[0:20])
 
 train_y = modify_y(train_y, 10)
 validation_y_2 = modify_y(validation_y, 10)
 
-y_preds = model.forward(train_x[0:20])
-model.backpropogation(train_y[0:20], y_preds, train_x[0:20])
-loss = Cross_Entropy_loss(y_preds, train_y[0:20])
-print(f"Loss: {loss}")
+
+# training batch wise
+epochs = 100
+batch_size = 32
+
+batches_x = [
+    train_x[i : i + batch_size] for i in range(0, train_x.shape[0], batch_size)
+]
+batches_y = [
+    train_y[i : i + batch_size] for i in range(0, train_y.shape[0], batch_size)
+]
+
+batches_x.pop()
+batches_y.pop()
+
+for epoch in range(epochs):
+    loss = 0
+    acc = 0
+    for i, batch in enumerate(batches_x):
+        y_preds = model.forward(batch)
+        model.backpropogation(batches_y[i], y_preds, batch)
+        loss += Cross_Entropy_loss(y_preds, batches_y[i])
+        acc += calculate_accuracy(y_preds, batches_y[i])
+    loss = loss / len(batches_x)
+    acc = acc / len(batches_x)
+    y_preds2 = model.forward(validation_x)
+    acc2 = calculate_accuracy(y_preds2, validation_y_2)
+    print(f"Epoch: {epoch} | Loss: {loss} | Train acc: {acc} | Test acc: {acc2}")
+
+
+# y_preds = model.forward(train_x)
+# model.backpropogation(train_y, y_preds, train_x)
+# loss = Cross_Entropy_loss(y_preds, train_y)
+# acc = calculate_accuracy(y_preds, train_y)
+# y_preds2 = model.forward(validation_x)
+# acc2 = calculate_accuracy(y_preds2, validation_y_2)
+# print(f"Loss: {loss} | Train acc: {acc} | Test acc: {acc2}")
