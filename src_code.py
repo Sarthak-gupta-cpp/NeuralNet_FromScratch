@@ -163,7 +163,33 @@ def calculate_accuracy(y_preds, y_actual):
     return np.mean((labels == tlabels).astype(float))
 
 
-model = NeuralNet()
+def plot_random(x, y, model, rows=5, columns=5):
+    fig, axes = plt.subplots(5, 5, figsize=(6, 6))
+    r = np.random.choice(x.shape[0], 25, replace=False)
+    selected = x[r]
+    ty = y[r]
+    y_preds = model.forward(selected)
+    y_preds = y_preds.argmax(axis=1)
+    ty = ty.argmax(axis=1)
+
+    for i, ax in enumerate(axes.flat):
+        img = selected[i].reshape(28, 28)
+        ax.imshow(img, cmap="gray")
+        ax.text(
+            10,
+            0,
+            f"{y_preds[i]}, {ty[i]}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            color="green" if y_preds[i] == ty[i] else "red",
+        )
+        ax.axis("off")
+
+    plt.show()
+
+
+model = NeuralNet(learning_rate=0.0001)  # the weights explode on lr=0.001??
 y_preds = model.forward(train_x[0:20])
 
 train_y = modify_y(train_y, 10)
@@ -171,7 +197,7 @@ validation_y_2 = modify_y(validation_y, 10)
 
 
 # training batch wise
-epochs = 100
+epochs = 50
 batch_size = 32
 
 batches_x = [
@@ -206,3 +232,24 @@ for epoch in range(epochs):
 # y_preds2 = model.forward(validation_x)
 # acc2 = calculate_accuracy(y_preds2, validation_y_2)
 # print(f"Loss: {loss} | Train acc: {acc} | Test acc: {acc2}")
+
+
+# fig, axes = plt.subplots(5, 5, figsize=(6,6))
+# r = np.random.choice(train_x.shape[0], 25, replace=False)
+# selected = train_x[r]
+# ty = train_y[r]
+# y_preds = model.forward(selected)
+# y_preds = y_preds.argmax(axis=1)
+# ty =ty.argmax(axis=1)
+
+
+# for i, ax in enumerate(axes.flat):
+#     img = selected[i].reshape(28, 28)
+#     ax.imshow(img, cmap='gray')
+#     ax.text(10, 0, f"{y_preds[i]}, {ty[i]}",ha='center', va='bottom', fontsize=10, color='green' if y_preds[i] == ty[i] else 'red')
+#     ax.axis('off')
+
+# plt.show()
+
+
+plot_random(x=validation_x, y=validation_y_2, model=model)
