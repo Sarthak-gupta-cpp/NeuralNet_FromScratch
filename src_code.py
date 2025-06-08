@@ -45,16 +45,99 @@ class Linear_Layer:
 
 class NeuralNet:
     def __init__(
-        self, input_shape=784, output_shape=10, hidden_layer=64, learning_rate=0.001
+        self,
+        input_shape=784,
+        output_shape=10,
+        hidden_layer=64,
+        learning_rate=0.001,
+        activation_fn=lambda x: x,
     ):
+        self.act = activation_fn
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.learning_rate = learning_rate
         self.input_layer = Linear_Layer(
-            input_shape=input_shape, output_shape=hidden_layer, activation_fn=ReLu
+            input_shape=input_shape,
+            output_shape=hidden_layer,
+            activation_fn=activation_fn,
         )
         self.hidden_layer1 = Linear_Layer(
-            input_shape=hidden_layer, output_shape=hidden_layer, activation_fn=ReLu
+            input_shape=hidden_layer,
+            output_shape=hidden_layer,
+            activation_fn=activation_fn,
+        )
+        self.output_layer = Linear_Layer(
+            input_shape=hidden_layer, output_shape=output_shape
+        )
+
+    def forward(self, x):
+        y = self.input_layer.forward(x)
+        y = self.hidden_layer1.forward(y)
+        y = self.output_layer.forward(y)
+        y = Softmax(y)
+        return y
+
+    def backpropogation(self, y_actual, y_preds, train_x):
+        dl_dz = (
+            (y_preds - y_actual) / y_preds.shape[0]
+        )  # (32x10)#dividing by batch size to get normalized loss (do not scale with batch_size)
+
+        # for output layer 64 -> 10
+        #          (64x32)               (32x10)
+        dl_dw = (
+            self.hidden_layer1.a.T @ dl_dz
+        )  #  (64x10) #@ is for matmul, in case i forget
+        dl_db = dl_dz.sum(axis=0)  # (1, 10)
+        dl_da = dl_dz @ self.output_layer.weights.T  # (32x64)
+
+        self.output_layer.weights = (
+            self.output_layer.weights - self.learning_rate * dl_dw
+        )
+        self.output_layer.bias = self.output_layer.bias - self.learning_rate * dl_db
+
+        # for hidden_layer1 64 -> 64 -> relu -> a
+        dl_dz = dl_da * derivative_ReLu(self.hidden_layer1.a)  # (32x64)
+        dl_dw = self.input_layer.a.T @ dl_dz
+        dl_db = dl_dz.sum(axis=0)
+        dl_da = dl_dz @ self.hidden_layer1.weights.T
+
+        self.hidden_layer1.weights = (
+            self.hidden_layer1.weights - self.learning_rate * dl_dw
+        )
+
+        self.hidden_layer1.bias = self.hidden_layer1.bias - self.learning_rate * dl_db
+
+        # for input layer 784 -> 64 -> relu -> a
+        dl_dz = dl_da * derivative_ReLu(self.input_layer.a)
+        dl_dw = train_x.T @ dl_dz
+        dl_db = dl_dz.sum(axis=0)
+
+        self.input_layer.weights = self.input_layer.weights - self.learning_rate * dl_dw
+        self.input_layer.bias = self.input_layer.bias - self.learning_rate * dl_db
+
+
+class CNNNeuralNet:
+    def __init__(
+        self,
+        input_shape=784,
+        output_shape=10,
+        hidden_layer=64,
+        learning_rate=0.001,
+        activation_fn=lambda x: x,
+    ):
+        self.act = activation_fn
+        self.input_shape = input_shape
+        self.output_shape = output_shape
+        self.learning_rate = learning_rate
+        self.input_layer = Linear_Layer(
+            input_shape=input_shape,
+            output_shape=hidden_layer,
+            activation_fn=activation_fn,
+        )
+        self.hidden_layer1 = Linear_Layer(
+            input_shape=hidden_layer,
+            output_shape=hidden_layer,
+            activation_fn=activation_fn,
         )
         self.output_layer = Linear_Layer(
             input_shape=hidden_layer, output_shape=output_shape
@@ -164,8 +247,8 @@ def calculate_accuracy(y_preds, y_actual):
 
 
 def plot_random(x, y, model, rows=5, columns=5):
-    fig, axes = plt.subplots(5, 5, figsize=(6, 6))
-    r = np.random.choice(x.shape[0], 25, replace=False)
+    fig, axes = plt.subplots(rows, columns, figsize=(6, 6))
+    r = np.random.choice(x.shape[0], rows * columns, replace=False)
     selected = x[r]
     ty = y[r]
     y_preds = model.forward(selected)
@@ -189,7 +272,11 @@ def plot_random(x, y, model, rows=5, columns=5):
     plt.show()
 
 
-model = NeuralNet(learning_rate=0.0001)  # the weights explode on lr=0.001??
+model1 = NeuralNet(
+    learning_rate=0.0001, activation_fn=ReLu
+)  # the weights explode on lr=0.001?? #93% accuracy on test data
+
+model = NeuralNet(learning_rate=0.0001, activation_fn=ReLu)
 y_preds = model.forward(train_x[0:20])
 
 train_y = modify_y(train_y, 10)
@@ -197,7 +284,7 @@ validation_y_2 = modify_y(validation_y, 10)
 
 
 # training batch wise
-epochs = 50
+epochs = 100
 batch_size = 32
 
 batches_x = [
@@ -222,7 +309,9 @@ for epoch in range(epochs):
     acc = acc / len(batches_x)
     y_preds2 = model.forward(validation_x)
     acc2 = calculate_accuracy(y_preds2, validation_y_2)
-    print(f"Epoch: {epoch} | Loss: {loss} | Train acc: {acc} | Test acc: {acc2}")
+    print(
+        f"Epoch: {epoch} | Loss: {loss:.4f} | Train acc: {acc * 100:.2f}| Test acc: {acc2 * 100:.2f}"
+    )
 
 
 # y_preds = model.forward(train_x)
@@ -252,4 +341,4 @@ for epoch in range(epochs):
 # plt.show()
 
 
-plot_random(x=validation_x, y=validation_y_2, model=model)
+plot_random(x=validation_x, y=validation_y_2, model=model, rows=8, columns=8)
