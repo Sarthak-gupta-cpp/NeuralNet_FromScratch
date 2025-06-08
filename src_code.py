@@ -43,6 +43,14 @@ class Linear_Layer:
         return self.a
 
 
+class Convulution_Layer:
+    def __init__(self, kernel, stride, padding, input_shape):
+        self.kernel = kernel
+        self.stride = self.stride
+        self.padding = padding
+        self.input_shape = input_shape
+
+
 class NeuralNet:
     def __init__(
         self,
@@ -59,12 +67,12 @@ class NeuralNet:
         self.input_layer = Linear_Layer(
             input_shape=input_shape,
             output_shape=hidden_layer,
-            activation_fn=activation_fn,
+            activation_fn=activation_fn.fn,
         )
         self.hidden_layer1 = Linear_Layer(
             input_shape=hidden_layer,
             output_shape=hidden_layer,
-            activation_fn=activation_fn,
+            activation_fn=activation_fn.fn,
         )
         self.output_layer = Linear_Layer(
             input_shape=hidden_layer, output_shape=output_shape
@@ -96,7 +104,7 @@ class NeuralNet:
         self.output_layer.bias = self.output_layer.bias - self.learning_rate * dl_db
 
         # for hidden_layer1 64 -> 64 -> relu -> a
-        dl_dz = dl_da * derivative_ReLu(self.hidden_layer1.a)  # (32x64)
+        dl_dz = dl_da * self.act.der(self.hidden_layer1.a)  # (32x64)
         dl_dw = self.input_layer.a.T @ dl_dz
         dl_db = dl_dz.sum(axis=0)
         dl_da = dl_dz @ self.hidden_layer1.weights.T
@@ -108,7 +116,7 @@ class NeuralNet:
         self.hidden_layer1.bias = self.hidden_layer1.bias - self.learning_rate * dl_db
 
         # for input layer 784 -> 64 -> relu -> a
-        dl_dz = dl_da * derivative_ReLu(self.input_layer.a)
+        dl_dz = dl_da * self.act.der(self.input_layer.a)
         dl_dw = train_x.T @ dl_dz
         dl_db = dl_dz.sum(axis=0)
 
@@ -116,7 +124,7 @@ class NeuralNet:
         self.input_layer.bias = self.input_layer.bias - self.learning_rate * dl_db
 
 
-class NeuralNet:
+class CNNNeuralNet:
     def __init__(
         self,
         input_shape=784,
@@ -201,12 +209,27 @@ def Softmax(x):
     return np.exp(x - m) / sum
 
 
-def ReLu(x):
-    return np.maximum(x, 0)
+class ReLu:
+    def fn(x):
+        return np.maximum(x, 0)
+
+    def der(x):
+        return (x >= 0).astype(float)
 
 
-def derivative_ReLu(x):
-    return (x >= 0).astype(float)
+class Leaky_ReLu:
+    def __init__(self, alpha):
+        self.alpha = alpha
+
+    def fn(self, x):
+        return np.maximum(x, self.alpha * x)
+
+    def der(self, x):
+        arr = x >= 0
+        return (arr - 1) * (1 - self.alpha) + 1
+
+
+# def derivative
 
 
 def tanh(x):
@@ -272,19 +295,24 @@ def plot_random(x, y, model, rows=5, columns=5):
     plt.show()
 
 
+train_y = modify_y(train_y, 10)
+validation_y_2 = modify_y(validation_y, 10)
+
 model1 = NeuralNet(
     learning_rate=0.0001, activation_fn=ReLu
 )  # the weights explode on lr=0.001?? #93% accuracy on test data
 
-model = NeuralNet(learning_rate=0.0001, activation_fn=ReLu)
-y_preds = model.forward(train_x[0:20])
+model2 = NeuralNet(
+    learning_rate=0.0001, activation_fn=Leaky_ReLu(0.01)
+)  # 95% acc with leaky ReLu(0.01)
 
-train_y = modify_y(train_y, 10)
-validation_y_2 = modify_y(validation_y, 10)
+model = NeuralNet(learning_rate=0.0001, activation_fn=Leaky_ReLu(0.01))
+
+y_preds = model.forward(train_x[0:20])
 
 
 # training batch wise
-epochs = 100
+epochs = 50
 batch_size = 32
 
 batches_x = [
