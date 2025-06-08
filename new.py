@@ -116,7 +116,7 @@ class NeuralNet:
         self.input_layer.bias = self.input_layer.bias - self.learning_rate * dl_db
 
 
-class NeuralNet:
+class CNNNeuralNet:
     def __init__(
         self,
         input_shape=784,
