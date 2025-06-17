@@ -44,11 +44,43 @@ class Linear_Layer:
 
 
 class Convulution_Layer:
-    def __init__(self, kernel, stride, padding, input_shape):
+    def __init__(
+        self,
+        kernel=2,
+        stride=1,
+        padding=0,
+        input_shape=1,
+        output_shape=10,
+        image_size=28,
+    ):
         self.kernel = kernel
-        self.stride = self.stride
+        self.stride = stride
         self.padding = padding
         self.input_shape = input_shape
+        self.output_shape = output_shape
+        self.image = image_size
+
+        self.weights = (
+            np.random.randn(output_shape, input_shape, kernel * kernel) * 0.01
+        )  # (10, 1, 4)
+        self.biases = np.random.randn(output_shape)
+
+    def forward(self, x):
+        out_shape = self.image + 2 * self.padding - self.kernel + 1
+        col = np.zeros((self.kernel, self.kernel))
+        cols = []
+
+        for i in range(0, out_shape, self.stride):
+            for j in range(0, out_shape, self.stride):
+                col = (x[i : i + self.kernel][j : j + self.kernel]).flatten()
+                col = self.weights @ col
+                cols.append(col)
+
+        np.column_stack(col)
+
+
+Layert = Convulution_Layer()
+Layert.forward(train_x[0].reshape(28, 28))
 
 
 class NeuralNet:
@@ -177,7 +209,7 @@ class CNNNeuralNet:
         self.output_layer.bias = self.output_layer.bias - self.learning_rate * dl_db
 
         # for hidden_layer1 64 -> 64 -> relu -> a
-        dl_dz = dl_da * derivative_ReLu(self.hidden_layer1.a)  # (32x64)
+        dl_dz = dl_da * self.act.der(self.hidden_layer1.a)  # (32x64)
         dl_dw = self.input_layer.a.T @ dl_dz
         dl_db = dl_dz.sum(axis=0)
         dl_da = dl_dz @ self.hidden_layer1.weights.T
@@ -189,7 +221,7 @@ class CNNNeuralNet:
         self.hidden_layer1.bias = self.hidden_layer1.bias - self.learning_rate * dl_db
 
         # for input layer 784 -> 64 -> relu -> a
-        dl_dz = dl_da * derivative_ReLu(self.input_layer.a)
+        dl_dz = dl_da * self.act.der(self.input_layer.a)
         dl_dw = train_x.T @ dl_dz
         dl_db = dl_dz.sum(axis=0)
 
@@ -292,6 +324,16 @@ def plot_random(x, y, model, rows=5, columns=5):
         )
         ax.axis("off")
 
+    plt.show()
+
+
+def plot_image(x):
+    """plot a image, give a 2d np array
+
+    Args:
+        x (np array): 2d black and white image
+    """
+    plt.imshow(x, cmap="gray")
     plt.show()
 
 
