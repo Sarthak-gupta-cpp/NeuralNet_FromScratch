@@ -79,8 +79,8 @@ class Convulution_Layer:
         np.column_stack(col)
 
 
-Layert = Convulution_Layer()
-Layert.forward(train_x[0].reshape(28, 28))
+# Layert = Convulution_Layer()
+# Layert.forward(train_x[0].reshape(28, 28))
 
 
 class NeuralNet:
@@ -328,11 +328,6 @@ def plot_random(x, y, model, rows=5, columns=5):
 
 
 def plot_image(x):
-    """plot a image, give a 2d np array
-
-    Args:
-        x (np array): 2d black and white image
-    """
     plt.imshow(x, cmap="gray")
     plt.show()
 
@@ -354,8 +349,8 @@ y_preds = model.forward(train_x[0:20])
 
 
 # training batch wise
-epochs = 50
-batch_size = 32
+epochs = 500
+batch_size = 64
 
 batches_x = [
     train_x[i : i + batch_size] for i in range(0, train_x.shape[0], batch_size)
