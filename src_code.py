@@ -72,15 +72,23 @@ class Convulution_Layer:
 
         for i in range(0, out_shape, self.stride):
             for j in range(0, out_shape, self.stride):
-                col = (x[i : i + self.kernel][j : j + self.kernel]).flatten()
-                col = self.weights @ col
-                cols.append(col)
+                col = (x[i : i + self.kernel, j : j + self.kernel]).flatten()
+                col = self.weights @ col  # (10, 1, 4) # (4, )
+                col = np.sum(col, axis=1) + self.biases
+                cols.append(col)  # col is (10, )
 
-        np.column_stack(col)
+        out = np.array(np.column_stack(cols))
+        out = out.reshape(self.output_shape, out_shape, out_shape)
+        print(out)
+        fig, axes = plt.subplots(5, 2, figsize=(10, 10))
+        for i, ax in enumerate(axes.flat):
+            ax.imshow(out[i], cmap="gray")
+
+        return out  # (10, 27, 27)
 
 
-# Layert = Convulution_Layer()
-# Layert.forward(train_x[0].reshape(28, 28))
+Layert = Convulution_Layer()
+out = Layert.forward(train_x[90].reshape(28, 28))
 
 
 class NeuralNet:
@@ -349,7 +357,7 @@ y_preds = model.forward(train_x[0:20])
 
 
 # training batch wise
-epochs = 500
+epochs = 10
 batch_size = 64
 
 batches_x = [
