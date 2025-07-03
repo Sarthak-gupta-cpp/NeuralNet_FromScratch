@@ -51,52 +51,62 @@ class Convulution_Layer:
         padding=0,
         input_shape=1,
         output_shape=10,
-        image_size=28,
     ):
         self.kernel = kernel
         self.stride = stride
         self.padding = padding
         self.input_shape = input_shape
         self.output_shape = output_shape
-        self.image = image_size
-
         self.weights = (
             np.random.randn(output_shape, input_shape, kernel, kernel) * 0.01
         )  # (10, 1, 4)
         self.biases = np.random.randn(output_shape)
 
     def forward(self, x):
-        out_shape = self.image + 2 * self.padding - self.kernel + 1
+        out_shape = x.shape[1] + 2 * self.padding - self.kernel + 1
         col = np.zeros((self.kernel, self.kernel))
-        cols = []
+        out = np.zeros((self.output_shape, out_shape, out_shape))
 
         for fil in range(self.output_shape):
             for i in range(0, out_shape, self.stride):
                 for j in range(0, out_shape, self.stride):
                     col = x[:, i : i + self.kernel, j : j + self.kernel]
-                    print(col.shape)
-                    col = self.weights @ col  # (10, 1, 2, 2) # (1, 2, 2)
-                    print(col.shape)
-                    col = np.sum(col, axis=1) + self.biases
-                    print(col.shape)
-                    cols.append(col)  # col is (10, )
+                    # print(col.shape)
+                    col = self.weights[fil] * col  # (1, 2, 2) * (1, 2, 2)
+                    # print(col.shape)
+                    col = np.sum(col) + self.biases[fil]
+                    # print(col)  # col is (1, )
+                    out[fil][i][j] = col
 
-        out = np.array(np.column_stack(cols))
         print(out.shape)
-        out = out.reshape(self.output_shape, out_shape, out_shape)
-        out = ReLu.fn(out)
+        # out = ReLu.fn(out)
         fig, axes = plt.subplots(5, 2, figsize=(10, 10))
         for i, ax in enumerate(axes.flat):
-            ax.imshow(out[i], cmap="gray")
+            ax.imshow(out[i], cmap="seismic")
 
         return out  # (10, 27, 27)
 
 
-Layert = Convulution_Layer()
-out = Layert.forward(train_x[10].reshape(1, 28, 28))
+class Max_Pooling_Layer:
+    def __init__(self, kernel=2, stride=2):
+        self.k = kernel
+        self.s = stride
 
-Layerth = Convulution_Layer(input_shape=10, image_size=27)
-out2 = Layerth.forward(out)
+    def forward(self, x):
+        # x is (10, 27, 27)
+        out_shape = (x.shape[1] - self.k) / self.s + 1
+        out = np.zeros(x.shape[0], out_shape, out_shape)
+
+        for i in range(0, x.shape[1], self.s):
+            for j in range(0, x.shape[2], self.s):
+                sel = x[:,]
+
+
+Layert = Convulution_Layer()
+out = Layert.forward(train_x[1].reshape(1, 28, 28))
+
+Layerth = Convulution_Layer(input_shape=10)
+out = Layerth.forward(out)
 
 
 class NeuralNet:
