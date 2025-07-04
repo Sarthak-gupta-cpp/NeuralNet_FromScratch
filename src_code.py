@@ -94,12 +94,28 @@ class Max_Pooling_Layer:
 
     def forward(self, x):
         # x is (10, 27, 27)
-        out_shape = (x.shape[1] - self.k) / self.s + 1
-        out = np.zeros(x.shape[0], out_shape, out_shape)
+        out_shape = int((x.shape[1] - self.k) / self.s + 1)
+        out = np.zeros((x.shape[0], out_shape, out_shape))
 
-        for i in range(0, x.shape[1], self.s):
-            for j in range(0, x.shape[2], self.s):
-                sel = x[:,]
+        ai = 0
+        aj = 0
+        for f in range(0, x.shape[0]):
+            for i in range(0, x.shape[1], self.s):
+                for j in range(0, x.shape[2], self.s):
+                    sel = x[f, i : i + self.k, j : j + self.k]
+                    m = np.max(sel)
+                    out[f][ai][aj] = m
+                    aj += 1
+                ai += 1
+                aj = 0
+            ai = 0
+
+        print(out.shape)
+        fig, axes = plt.subplots(5, 2, figsize=(10, 10))
+        for i, ax in enumerate(axes.flat):
+            ax.imshow(out[i], cmap="seismic")
+
+        return out
 
 
 Layert = Convulution_Layer()
@@ -107,6 +123,9 @@ out = Layert.forward(train_x[1].reshape(1, 28, 28))
 
 Layerth = Convulution_Layer(input_shape=10)
 out = Layerth.forward(out)
+
+LayerM = Max_Pooling_Layer()
+out = LayerM.forward(out)
 
 
 class NeuralNet:
@@ -187,7 +206,7 @@ class CNNNeuralNet:
         self,
         input_shape=784,
         output_shape=10,
-        hidden_layer=64,
+        filters=64,
         learning_rate=0.001,
         activation_fn=lambda x: x,
     ):
@@ -195,24 +214,21 @@ class CNNNeuralNet:
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.learning_rate = learning_rate
-        self.input_layer = Linear_Layer(
-            input_shape=input_shape,
-            output_shape=hidden_layer,
-            activation_fn=activation_fn,
+        self.Layer1 = Convulution_Layer(
+            kernel=2, padding=0, stride=1, output_shape=filters, input_shape=1
         )
-        self.hidden_layer1 = Linear_Layer(
-            input_shape=hidden_layer,
-            output_shape=hidden_layer,
-            activation_fn=activation_fn,
+        self.Layer2 = Max_Pooling_Layer(kernel=2, stride=2)
+        self.Layer3 = Convulution_Layer(
+            kernel=2, padding=0, stride=1, output_shape=filters, input_shape=filters
         )
-        self.output_layer = Linear_Layer(
-            input_shape=hidden_layer, output_shape=output_shape
-        )
+        self.Layer4 = Max_Pooling_Layer(kernel=2, stride=2)
 
     def forward(self, x):
-        y = self.input_layer.forward(x)
-        y = self.hidden_layer1.forward(y)
-        y = self.output_layer.forward(y)
+        y = self.Layer1.forward(x)
+        y = self.act.fn(y)
+        y = self.Layer2.forward(y)
+        y = self.Layer3.forward(y)
+        y =     ``      `454567643456765`
         y = Softmax(y)
         return y
 
@@ -369,7 +385,7 @@ model2 = NeuralNet(
     learning_rate=0.0001, activation_fn=Leaky_ReLu(0.01)
 )  # 95% acc with leaky ReLu(0.01)
 
-model = NeuralNet(learning_rate=0.0001, activation_fn=Leaky_ReLu(0.01))
+model = CNNNeuralNet(learning_rate=0.0001, activation_fn=ReLu())
 
 y_preds = model.forward(train_x[0:20])
 
