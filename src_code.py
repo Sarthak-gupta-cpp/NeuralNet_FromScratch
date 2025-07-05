@@ -62,27 +62,41 @@ class Convulution_Layer:
         )  # (10, 1, 4)
         self.biases = np.random.randn(output_shape)
 
+    def im2col(self, x):
+        b, c, h, w = x.shape  # (h=w for mnist)
+        cols = []
+        for i in range(0, h - self.kernel + 1, self.stride):
+            for j in range(0, w - self.kernel + 1, self.stride):
+                patch = x[
+                    :, :, i : i + self.kernel, j : j + self.kernel
+                ]  # (B, c, k, k)
+                cols.append(patch.reshape(b, -1))  # (b, c*k*k)
+
+        col = np.stack(cols, axis=1)
+        print(col.shape)
+
     def forward(self, x):
-        out_shape = x.shape[1] + 2 * self.padding - self.kernel + 1
+        out_shape = x.shape[2] + 2 * self.padding - self.kernel + 1
         col = np.zeros((self.kernel, self.kernel))
-        out = np.zeros((self.output_shape, out_shape, out_shape))
+        out = np.zeros((x.shape[0], self.output_shape, out_shape, out_shape))
 
         for fil in range(self.output_shape):
             for i in range(0, out_shape, self.stride):
                 for j in range(0, out_shape, self.stride):
-                    col = x[:, i : i + self.kernel, j : j + self.kernel]
-                    # print(col.shape)
+                    col = x[:, :, i : i + self.kernel, j : j + self.kernel]
+                    print(col.shape)
                     col = self.weights[fil] * col  # (1, 2, 2) * (1, 2, 2)
-                    # print(col.shape)
+                    print(col.shape)
                     col = np.sum(col) + self.biases[fil]
-                    # print(col)  # col is (1, )
-                    out[fil][i][j] = col
+                    print(col)  # col is (1, )
+                    out[0][fil][i][j] = col
 
         print(out.shape)
         # out = ReLu.fn(out)
-        fig, axes = plt.subplots(5, 2, figsize=(10, 10))
-        for i, ax in enumerate(axes.flat):
-            ax.imshow(out[i], cmap="seismic")
+        for ko in range(10):
+            fig, axes = plt.subplots(5, 2, figsize=(10, 10))
+            for i, ax in enumerate(axes.flat):
+                ax.imshow(out[ko][i], cmap="seismic")
 
         return out  # (10, 27, 27)
 
@@ -100,8 +114,8 @@ class Max_Pooling_Layer:
         ai = 0
         aj = 0
         for f in range(0, x.shape[0]):
-            for i in range(0, x.shape[1], self.s):
-                for j in range(0, x.shape[2], self.s):
+            for i in range(0, x.shape[1] - 1, self.s):
+                for j in range(0, x.shape[2] - 1, self.s):
                     sel = x[f, i : i + self.k, j : j + self.k]
                     m = np.max(sel)
                     out[f][ai][aj] = m
@@ -119,7 +133,10 @@ class Max_Pooling_Layer:
 
 
 Layert = Convulution_Layer()
-out = Layert.forward(train_x[1].reshape(1, 28, 28))
+Layert.im2col(train_x[0:10].reshape(10, 1, 28, 28))
+
+
+out = Layert.forward(train_x[0:10].reshape(10, 1, 28, 28))
 
 Layerth = Convulution_Layer(input_shape=10)
 out = Layerth.forward(out)
@@ -222,13 +239,26 @@ class CNNNeuralNet:
             kernel=2, padding=0, stride=1, output_shape=filters, input_shape=filters
         )
         self.Layer4 = Max_Pooling_Layer(kernel=2, stride=2)
+        # self.Layer5 = Linear_Layer(input_shape=)
+
+        self.Layer5 = Linear_Layer(
+            input_shape=360, output_shape=32, activation_fn=activation_fn
+        )
+        self.Layer6 = Linear_Layer(
+            input_shape=32, output_shape=output_shape, activation_fn=activation_fn
+        )
 
     def forward(self, x):
         y = self.Layer1.forward(x)
         y = self.act.fn(y)
         y = self.Layer2.forward(y)
         y = self.Layer3.forward(y)
-        y =     ``      `454567643456765`
+        y = self.act.fn(y)
+        y = self.Layer4.forward(y)
+        y = y.flatten()
+        y = self.Layer5.forward(y)
+        y = self.Layer6.forward(y)
+
         y = Softmax(y)
         return y
 
