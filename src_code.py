@@ -26,21 +26,70 @@ class Neuron:
 
 
 class Linear_Layer:
-    def __init__(self, input_shape, output_shape, activation_fn=lambda x: x):
+    def __init__(self, input_shape, output_shape):
         self.input_shape = input_shape
         self.output_shape = output_shape
-        self.activation_fn = activation_fn
         self.z = 0
-        self.a = 0
         # self.neurons = np.array([Neuron(input_shape) for i in range(output_shape)])  (making a list of neurons was not efficient and i was not able to include batches using this)
         self.weights = np.random.randn(input_shape, output_shape) * 0.01
         self.bias = np.random.randn(output_shape) * 0.01
+        self.input = 0
 
     def forward(self, x):
         # return self.activation_fn(np.array([i.forward(x) for i in self.neurons]))
         self.z = np.matmul(x, self.weights) + self.bias
-        self.a = self.activation_fn(self.z)
-        return self.a
+        self.input = x
+        return self.z
+
+    def backward(self, dl_dout, lr):
+        dl_dx = dl_dout @ self.weights.T
+        dl_dw = self.input.T @ dl_dout
+        dl_db = np.sum(dl_dout, axis=0)
+
+        self.weights -= dl_dw * lr
+        self.bias -= dl_db * lr
+
+
+class Max_Pooling_Layer:
+    def __init__(self, kernel=2, stride=2):
+        self.k = kernel
+        self.s = stride
+
+    def forward(self, x):
+        # x is (10, 10, 27, 27)
+        out_shape = int((x.shape[2] - self.k) / self.s + 1)
+        out = np.zeros((x.shape[0], x.shape[1], out_shape, out_shape))
+
+        ai = 0
+        aj = 0
+        for b in range(0, x.shape[0]):
+            for f in range(0, x.shape[1]):
+                for i in range(0, x.shape[2] - 1, self.s):
+                    for j in range(0, x.shape[3] - 1, self.s):
+                        sel = x[b, f, i : i + self.k, j : j + self.k]
+                        m = np.max(sel)
+                        out[b][f][ai][aj] = m
+                        aj += 1
+                    ai += 1
+                    aj = 0
+                ai = 0
+
+        print(out.shape)
+
+        # for j in range(out.shape[0]):
+        #     fig, axes = plt.subplots(5, 2, figsize=(6, 6))
+        #     for i, ax in enumerate(axes.flat):
+        #         img = out[j][i]
+        #         ax.imshow(img, cmap="seismic")
+        #         ax.axis("off")
+
+        fig, axes = plt.subplots(5, 2, figsize=(6, 6))
+        for i, ax in enumerate(axes.flat):
+            img = out[0][i]
+            ax.imshow(img, cmap="seismic")
+            ax.axis("off")
+
+        return out
 
 
 class Convulution_Layer:
@@ -57,9 +106,9 @@ class Convulution_Layer:
         self.padding = padding
         self.input_shape = input_shape
         self.output_shape = output_shape
-        self.weights = (
-            np.random.randn(output_shape, input_shape, kernel, kernel) * 0.01
-        )  # (10, 1, 4)
+        self.weights = np.random.randn(
+            self.output_shape, self.input_shape * kernel * kernel
+        )  # (10, 1*2*2)
         self.biases = np.random.randn(output_shape)
 
     def im2col(self, x):
@@ -73,67 +122,45 @@ class Convulution_Layer:
                 cols.append(patch.reshape(b, -1))  # (b, c*k*k)
 
         col = np.stack(cols, axis=1)
-        print(col.shape)
+        print(col.shape)  # (10, 729, 4)
+        return col
 
     def forward(self, x):
-        out_shape = x.shape[2] + 2 * self.padding - self.kernel + 1
-        col = np.zeros((self.kernel, self.kernel))
-        out = np.zeros((x.shape[0], self.output_shape, out_shape, out_shape))
+        # x is (10, 1, 28, 28)
 
-        for fil in range(self.output_shape):
-            for i in range(0, out_shape, self.stride):
-                for j in range(0, out_shape, self.stride):
-                    col = x[:, :, i : i + self.kernel, j : j + self.kernel]
-                    print(col.shape)
-                    col = self.weights[fil] * col  # (1, 2, 2) * (1, 2, 2)
-                    print(col.shape)
-                    col = np.sum(col) + self.biases[fil]
-                    print(col)  # col is (1, )
-                    out[0][fil][i][j] = col
+        b, c, h, w = x.shape
 
-        print(out.shape)
-        # out = ReLu.fn(out)
-        for ko in range(10):
-            fig, axes = plt.subplots(5, 2, figsize=(10, 10))
-            for i, ax in enumerate(axes.flat):
-                ax.imshow(out[ko][i], cmap="seismic")
+        out_h = (h + 2 * self.padding - self.kernel) // self.stride + 1
+        out_w = (w + 2 * self.padding - self.kernel) // self.stride + 1
 
-        return out  # (10, 27, 27)
+        x_col = self.im2col(x)  # (10, 729, 4)
 
+        # (b, n, c)
+        out = x_col @ self.weights.T  # (10, 729, 10)
 
-class Max_Pooling_Layer:
-    def __init__(self, kernel=2, stride=2):
-        self.k = kernel
-        self.s = stride
-
-    def forward(self, x):
-        # x is (10, 27, 27)
-        out_shape = int((x.shape[1] - self.k) / self.s + 1)
-        out = np.zeros((x.shape[0], out_shape, out_shape))
-
-        ai = 0
-        aj = 0
-        for f in range(0, x.shape[0]):
-            for i in range(0, x.shape[1] - 1, self.s):
-                for j in range(0, x.shape[2] - 1, self.s):
-                    sel = x[f, i : i + self.k, j : j + self.k]
-                    m = np.max(sel)
-                    out[f][ai][aj] = m
-                    aj += 1
-                ai += 1
-                aj = 0
-            ai = 0
+        out = out.transpose(0, 2, 1)  # (b, c, n) (10, 10, 729)
+        out = out.reshape(b, self.output_shape, out_h, out_w)  # (10, 10, 27, 27)
 
         print(out.shape)
-        fig, axes = plt.subplots(5, 2, figsize=(10, 10))
+
+        # for j in range(out.shape[0]):
+        #     fig, axes = plt.subplots(5, 2, figsize=(6, 6))
+        #     for i, ax in enumerate(axes.flat):
+        #         img = out[j][i]
+        #         ax.imshow(img, cmap="seismic")
+        #         ax.axis("off")
+
+        fig, axes = plt.subplots(5, 2, figsize=(6, 6))
         for i, ax in enumerate(axes.flat):
-            ax.imshow(out[i], cmap="seismic")
+            img = out[0][i]
+            ax.imshow(img, cmap="seismic")
+            ax.axis("off")
 
         return out
 
 
 Layert = Convulution_Layer()
-Layert.im2col(train_x[0:10].reshape(10, 1, 28, 28))
+out = Layert.forward(train_x[10:20].reshape(10, 1, 28, 28))
 
 
 out = Layert.forward(train_x[0:10].reshape(10, 1, 28, 28))
@@ -221,43 +248,66 @@ class NeuralNet:
 class CNNNeuralNet:
     def __init__(
         self,
-        input_shape=784,
+        input_shape=1,
         output_shape=10,
-        filters=64,
+        filters=32,
         learning_rate=0.001,
         activation_fn=lambda x: x,
+        kernel=2,
+        padding=0,
+        stride=1,
+        mkernel=2,
+        mstride=2,
+        image_size=28,
     ):
         self.act = activation_fn
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.learning_rate = learning_rate
         self.Layer1 = Convulution_Layer(
-            kernel=2, padding=0, stride=1, output_shape=filters, input_shape=1
+            kernel=kernel,
+            padding=0,
+            stride=stride,
+            output_shape=filters,
+            input_shape=input_shape,
         )
-        self.Layer2 = Max_Pooling_Layer(kernel=2, stride=2)
+        self.Layer2 = Max_Pooling_Layer(kernel=mkernel, stride=mstride)
         self.Layer3 = Convulution_Layer(
-            kernel=2, padding=0, stride=1, output_shape=filters, input_shape=filters
+            kernel=kernel,
+            padding=0,
+            stride=stride,
+            output_shape=filters,
+            input_shape=filters,
         )
-        self.Layer4 = Max_Pooling_Layer(kernel=2, stride=2)
-        # self.Layer5 = Linear_Layer(input_shape=)
+        self.Layer4 = Max_Pooling_Layer(kernel=mkernel, stride=mstride)
+
+        shape = image_size
+        shape = (shape + 2 * padding - kernel) // stride + 1  # layer1
+        shape = (shape - mkernel) // mstride + 1  # layer2
+        shape = (shape + 2 * padding - kernel) // stride + 1  # layer3
+        shape = (shape - mkernel) // mstride + 1  # layer4
 
         self.Layer5 = Linear_Layer(
-            input_shape=360, output_shape=32, activation_fn=activation_fn
+            input_shape=shape * shape * filters,
+            output_shape=32,
+            activation_fn=activation_fn,
         )
         self.Layer6 = Linear_Layer(
             input_shape=32, output_shape=output_shape, activation_fn=activation_fn
         )
 
     def forward(self, x):
-        y = self.Layer1.forward(x)
-        y = self.act.fn(y)
-        y = self.Layer2.forward(y)
-        y = self.Layer3.forward(y)
-        y = self.act.fn(y)
-        y = self.Layer4.forward(y)
-        y = y.flatten()
-        y = self.Layer5.forward(y)
-        y = self.Layer6.forward(y)
+        y = self.Layer1.forward(x)  # conv
+        y = self.act.fn(y)  # ReLu
+        y = self.Layer2.forward(y)  # maxpool
+        y = self.Layer3.forward(y)  # conv
+        y = self.act.fn(y)  # ReLu
+        y = self.Layer4.forward(y)  # maxpool
+        y = y.reshape(y.shape[0], -1)
+        y = self.Layer5.forward(y)  # Linear
+        y = self.act.fn(y)  # ReLu
+        y = self.Layer6.forward(y)  # Linear
+        y = self.act.fn(y)  # ReLu
 
         y = Softmax(y)
         return y
@@ -296,6 +346,7 @@ class CNNNeuralNet:
         dl_dz = dl_da * self.act.der(self.input_layer.a)
         dl_dw = train_x.T @ dl_dz
         dl_db = dl_dz.sum(axis=0)
+        dl_da = dl_dz @ self.output_shape
 
         self.input_layer.weights = self.input_layer.weights - self.learning_rate * dl_dw
         self.input_layer.bias = self.input_layer.bias - self.learning_rate * dl_db
@@ -314,10 +365,10 @@ def Softmax(x):
 
 
 class ReLu:
-    def fn(x):
+    def fn(self, x):
         return np.maximum(x, 0)
 
-    def der(x):
+    def der(self, x):
         return (x >= 0).astype(float)
 
 
@@ -416,6 +467,8 @@ model2 = NeuralNet(
 )  # 95% acc with leaky ReLu(0.01)
 
 model = CNNNeuralNet(learning_rate=0.0001, activation_fn=ReLu())
+out = model.forward(train_x[0:10].reshape(10, 1, 28, 28))
+
 
 y_preds = model.forward(train_x[0:20])
 
