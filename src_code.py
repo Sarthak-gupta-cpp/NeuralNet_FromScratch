@@ -49,32 +49,44 @@ class Linear_Layer:
         self.weights -= dl_dw * lr
         self.bias -= dl_db * lr
 
+        return dl_dx
+
 
 class Max_Pooling_Layer:
     def __init__(self, kernel=2, stride=2):
         self.k = kernel
         self.s = stride
+        self.mask = 0
+        self.input = 0
 
     def forward(self, x):
         # x is (10, 10, 27, 27)
+
         out_shape = int((x.shape[2] - self.k) / self.s + 1)
+        # self.mask = np.zeros((x.shape[0], x.shap))
+        self.mask = np.zeros_like(x)
+
         out = np.zeros((x.shape[0], x.shape[1], out_shape, out_shape))
 
         ai = 0
         aj = 0
         for b in range(0, x.shape[0]):
             for f in range(0, x.shape[1]):
-                for i in range(0, x.shape[2] - 1, self.s):
-                    for j in range(0, x.shape[3] - 1, self.s):
+                for i in range(0, x.shape[2] - self.k + 1, self.s):
+                    for j in range(0, x.shape[3] - self.k + 1, self.s):
                         sel = x[b, f, i : i + self.k, j : j + self.k]
                         m = np.max(sel)
                         out[b][f][ai][aj] = m
                         aj += 1
+
+                        mask = sel == m  # (k,k)
+                        self.mask[b, f, i : i + self.k, j : j + self.k] = mask
+
                     ai += 1
                     aj = 0
                 ai = 0
 
-        print(out.shape)
+        # print(out.shape)
 
         # for j in range(out.shape[0]):
         #     fig, axes = plt.subplots(5, 2, figsize=(6, 6))
@@ -83,13 +95,29 @@ class Max_Pooling_Layer:
         #         ax.imshow(img, cmap="seismic")
         #         ax.axis("off")
 
-        fig, axes = plt.subplots(5, 2, figsize=(6, 6))
-        for i, ax in enumerate(axes.flat):
-            img = out[0][i]
-            ax.imshow(img, cmap="seismic")
-            ax.axis("off")
+        # fig, axes = plt.subplots(5, 2, figsize=(6, 6))
+        # for i, ax in enumerate(axes.flat):
+        #     img = out[0][i]
+        #     ax.imshow(img, cmap="seismic")
+        #     ax.axis("off")
 
         return out
+
+    def backward(self, dl_dout):
+        # dl_dout is (b, c, h_out, w_out)
+        # mask is (b, c, h_in, w_in)
+
+        # dl_dout_2 = np.expand_dims(dl_dout, axis=-1)
+        # dl_dout_2 = np.expand_dims(dl_dout_2, axis=-1)
+
+        # dl_dout_2 = dl_dout.repeat(self.k, axis=-2).repeat(self.k, axis=-1) #(b, c, h, w, 2, 2)
+
+        # dl_dout_2 = self.mask * dl_dout_2
+
+        dl_dout_expanded = dl_dout.repeat(self.k, axis=2).repeat(self.k, axis=3)
+        dl_dx = dl_dout_expanded * self.mask
+
+        return dl_dx
 
 
 class Convulution_Layer:
@@ -295,6 +323,7 @@ class CNNNeuralNet:
         self.Layer6 = Linear_Layer(
             input_shape=32, output_shape=output_shape, activation_fn=activation_fn
         )
+        self.shape_before = 0
 
     def forward(self, x):
         y = self.Layer1.forward(x)  # conv
@@ -303,6 +332,9 @@ class CNNNeuralNet:
         y = self.Layer3.forward(y)  # conv
         y = self.act.fn(y)  # ReLu
         y = self.Layer4.forward(y)  # maxpool
+
+        self.shape_before = y.shape  # for backward
+
         y = y.reshape(y.shape[0], -1)
         y = self.Layer5.forward(y)  # Linear
         y = self.act.fn(y)  # ReLu
@@ -313,43 +345,15 @@ class CNNNeuralNet:
         return y
 
     def backpropogation(self, y_actual, y_preds, train_x):
-        dl_dz = (
+        dl_dout = (
             (y_preds - y_actual) / y_preds.shape[0]
-        )  # (32x10)#dividing by batch size to get normalized loss (do not scale with batch_size)
+        )  # (32x10)#dividing by batch size to get normalized loss (do not scale with batch_size) #softmax+ReLu
 
-        # for output layer 64 -> 10
-        #          (64x32)               (32x10)
-        dl_dw = (
-            self.hidden_layer1.a.T @ dl_dz
-        )  #  (64x10) #@ is for matmul, in case i forget
-        dl_db = dl_dz.sum(axis=0)  # (1, 10)
-        dl_da = dl_dz @ self.output_layer.weights.T  # (32x64)
+        dl_dout = self.Layer6.backward(dl_dout, self.learning_rate)
+        dl_dout = self.act.der(dl_dout)
 
-        self.output_layer.weights = (
-            self.output_layer.weights - self.learning_rate * dl_dw
-        )
-        self.output_layer.bias = self.output_layer.bias - self.learning_rate * dl_db
-
-        # for hidden_layer1 64 -> 64 -> relu -> a
-        dl_dz = dl_da * self.act.der(self.hidden_layer1.a)  # (32x64)
-        dl_dw = self.input_layer.a.T @ dl_dz
-        dl_db = dl_dz.sum(axis=0)
-        dl_da = dl_dz @ self.hidden_layer1.weights.T
-
-        self.hidden_layer1.weights = (
-            self.hidden_layer1.weights - self.learning_rate * dl_dw
-        )
-
-        self.hidden_layer1.bias = self.hidden_layer1.bias - self.learning_rate * dl_db
-
-        # for input layer 784 -> 64 -> relu -> a
-        dl_dz = dl_da * self.act.der(self.input_layer.a)
-        dl_dw = train_x.T @ dl_dz
-        dl_db = dl_dz.sum(axis=0)
-        dl_da = dl_dz @ self.output_shape
-
-        self.input_layer.weights = self.input_layer.weights - self.learning_rate * dl_dw
-        self.input_layer.bias = self.input_layer.bias - self.learning_rate * dl_db
+        dl_dout = self.Layer5.backward(dl_dout, self.learning_rate)
+        dl_dout = dl_dout.reshape(self.shape_before)
 
 
 def Softmax(x):
