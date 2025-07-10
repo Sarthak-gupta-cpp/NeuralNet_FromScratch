@@ -121,14 +121,7 @@ class Max_Pooling_Layer:
 
 
 class Convulution_Layer:
-    def __init__(
-        self,
-        kernel=2,
-        stride=1,
-        padding=0,
-        input_shape=1,
-        output_shape=10,
-    ):
+    def __init__(self, kernel=2, stride=1, padding=0, input_shape=1, output_shape=10):
         self.kernel = kernel
         self.stride = stride
         self.padding = padding
@@ -138,6 +131,7 @@ class Convulution_Layer:
             self.output_shape, self.input_shape * kernel * kernel
         )  # (10, 1*2*2)
         self.biases = np.random.randn(output_shape)
+        self.input = 0
 
     def im2col(self, x):
         b, c, h, w = x.shape  # (h=w for mnist)
@@ -184,7 +178,12 @@ class Convulution_Layer:
             ax.imshow(img, cmap="seismic")
             ax.axis("off")
 
+        self.input = x
+
         return out
+
+    def backward(self, dl_dout):
+        return
 
 
 Layert = Convulution_Layer()
