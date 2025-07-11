@@ -132,6 +132,7 @@ class Convulution_Layer:
         )  # (10, 1*2*2)
         self.biases = np.random.randn(output_shape)
         self.input = 0
+        self.input_real = 0
 
     def im2col(self, x):
         b, c, h, w = x.shape  # (h=w for mnist)
@@ -144,7 +145,8 @@ class Convulution_Layer:
                 cols.append(patch.reshape(b, -1))  # (b, c*k*k)
 
         col = np.stack(cols, axis=1)
-        print(col.shape)  # (10, 729, 4)
+        # print(col.shape)  # (10, 729, 4)
+        self.input = col
         return col
 
     def forward(self, x):
@@ -159,6 +161,7 @@ class Convulution_Layer:
 
         # (b, n, c)
         out = x_col @ self.weights.T  # (10, 729, 10)
+        out += self.biases[None, None, :]
 
         out = out.transpose(0, 2, 1)  # (b, c, n) (10, 10, 729)
         out = out.reshape(b, self.output_shape, out_h, out_w)  # (10, 10, 27, 27)
@@ -172,31 +175,61 @@ class Convulution_Layer:
         #         ax.imshow(img, cmap="seismic")
         #         ax.axis("off")
 
-        fig, axes = plt.subplots(5, 2, figsize=(6, 6))
-        for i, ax in enumerate(axes.flat):
-            img = out[0][i]
-            ax.imshow(img, cmap="seismic")
-            ax.axis("off")
+        # fig, axes = plt.subplots(5, 2, figsize=(6, 6))
+        # for i, ax in enumerate(axes.flat):
+        #     img = out[0][i]
+        #     ax.imshow(img, cmap="seismic")
+        #     ax.axis("off")
 
-        self.input = x
+        self.input_real = x
 
         return out
 
-    def backward(self, dl_dout):
-        return
+    def backward(self, dl_dout, lr):
+        B, out_C, out_H, out_W = dl_dout.shape
+        s = self.stride
+        k = self.kernel
+        B, c, h, w = self.input_real.shape
+
+        # dl_dout to (B, out_H*out_W, out_C)
+        dl_dout_flat = dl_dout.reshape(B, out_C, -1).transpose(
+            0, 2, 1
+        )  # (B, N, out_C) = (10, 729, 10)
+
+        # self.input: im2col(x), shape = (B, N, C*k*k)
+        dl_dw = dl_dout_flat.transpose(1, 2, 0) @ self.input.transpose(1, 0, 2)
+        dl_dw = dl_dw.sum(axis=0)  # (out_C, C*k*k)
+
+        dl_db = dl_dout_flat.sum(axis=(0, 1))  # (out_C,)
+
+        dl_dx_col = dl_dout_flat @ self.weights  # (B, N, C*k*k)
+
+        # Need to reconstruct dx from dx_col using col2im
+        dl_dx = np.zeros_like(self.input_real)
+
+        idx = 0
+        for i in range(0, out_H * s, s):
+            for j in range(0, out_W * s, s):
+                patch = dl_dx_col[:, idx, :].reshape(B, c, k, k)
+                dl_dx[:, :, i : i + k, j : j + k] += patch
+                idx += 1
+
+        self.weights -= lr * dl_dw
+        self.biases -= lr * dl_db
+        return dl_dx
 
 
-Layert = Convulution_Layer()
-out = Layert.forward(train_x[10:20].reshape(10, 1, 28, 28))
+# Layert = Convulution_Layer()
+# out = Layert.forward(train_x[10:20].reshape(10, 1, 28, 28))
 
 
-out = Layert.forward(train_x[0:10].reshape(10, 1, 28, 28))
+# out = Layert.forward(train_x[0:10].reshape(10, 1, 28, 28))
 
-Layerth = Convulution_Layer(input_shape=10)
-out = Layerth.forward(out)
+# Layerth = Convulution_Layer(input_shape=10)
+# out = Layerth.forward(out)
 
-LayerM = Max_Pooling_Layer()
-out = LayerM.forward(out)
+# LayerM = Max_Pooling_Layer()
+# out = LayerM.forward(out)
 
 
 class NeuralNet:
@@ -317,11 +350,8 @@ class CNNNeuralNet:
         self.Layer5 = Linear_Layer(
             input_shape=shape * shape * filters,
             output_shape=32,
-            activation_fn=activation_fn,
         )
-        self.Layer6 = Linear_Layer(
-            input_shape=32, output_shape=output_shape, activation_fn=activation_fn
-        )
+        self.Layer6 = Linear_Layer(input_shape=32, output_shape=output_shape)
         self.shape_before = 0
 
     def forward(self, x):
@@ -343,16 +373,26 @@ class CNNNeuralNet:
         y = Softmax(y)
         return y
 
-    def backpropogation(self, y_actual, y_preds, train_x):
+    def backpropogation(self, y_actual, y_preds):
         dl_dout = (
             (y_preds - y_actual) / y_preds.shape[0]
-        )  # (32x10)#dividing by batch size to get normalized loss (do not scale with batch_size) #softmax+ReLu
+        )  # (32x10)#dividing by batch size to get normalized loss (do not scale with batch_size) #softmax+cross-entropy
 
+        dl_dout = self.act.der(self.Layer6.input) * dl_dout
         dl_dout = self.Layer6.backward(dl_dout, self.learning_rate)
-        dl_dout = self.act.der(dl_dout)
+        dl_dout = self.act.der(self.Layer5.input) * dl_dout
 
         dl_dout = self.Layer5.backward(dl_dout, self.learning_rate)
         dl_dout = dl_dout.reshape(self.shape_before)
+
+        dl_dout = self.Layer4.backward(dl_dout)
+        dl_dout = self.act.der(self.Layer3.input) * dl_dout
+
+        dl_dout = self.Layer3.backward(dl_dout, self.learning_rate)
+        dl_dout = self.Layer2.backward(dl_dout)
+        dl_dout = self.act.der(dl_dout)
+
+        dl_dout = self.Layer1.backward(dl_dout, self.learning_rate)
 
 
 def Softmax(x):
@@ -368,10 +408,15 @@ def Softmax(x):
 
 
 class ReLu:
+    def __init__(self):
+        self.input = 0
+
     def fn(self, x):
+        self.input = x
         return np.maximum(x, 0)
 
-    def der(self, x):
+    def der(self):
+        x = self.input
         return (x >= 0).astype(float)
 
 
@@ -461,19 +506,19 @@ def plot_image(x):
 train_y = modify_y(train_y, 10)
 validation_y_2 = modify_y(validation_y, 10)
 
-model1 = NeuralNet(
-    learning_rate=0.0001, activation_fn=ReLu
-)  # the weights explode on lr=0.001?? #93% accuracy on test data
+# model1 = NeuralNet(
+#     learning_rate=0.0001, activation_fn=ReLu
+# )  # the weights explode on lr=0.001?? #93% accuracy on test data
 
-model2 = NeuralNet(
-    learning_rate=0.0001, activation_fn=Leaky_ReLu(0.01)
-)  # 95% acc with leaky ReLu(0.01)
+# model2 = NeuralNet(
+#     learning_rate=0.0001, activation_fn=Leaky_ReLu(0.01)
+# )  # 95% acc with leaky ReLu(0.01)
 
 model = CNNNeuralNet(learning_rate=0.0001, activation_fn=ReLu())
-out = model.forward(train_x[0:10].reshape(10, 1, 28, 28))
+# out = model.forward(train_x[0:10].reshape(10, 1, 28, 28))
 
 
-y_preds = model.forward(train_x[0:20])
+# y_preds = model.forward(train_x[0:20])
 
 
 # training batch wise
@@ -494,8 +539,8 @@ for epoch in range(epochs):
     loss = 0
     acc = 0
     for i, batch in enumerate(batches_x):
-        y_preds = model.forward(batch)
-        model.backpropogation(batches_y[i], y_preds, batch)
+        y_preds = model.forward(batch.reshape(batch.shape[0], 1, 28, 28))
+        model.backpropogation(batches_y[i], y_preds)
         loss += Cross_Entropy_loss(y_preds, batches_y[i])
         acc += calculate_accuracy(y_preds, batches_y[i])
     loss = loss / len(batches_x)
