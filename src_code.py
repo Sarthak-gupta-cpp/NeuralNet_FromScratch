@@ -1,4 +1,4 @@
-import numpy as np
+import cupy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
@@ -11,8 +11,15 @@ train_data, validation_data = train_test_split(train_data)
 train_y = train_data["label"].to_numpy()
 train_x = train_data.drop(columns=["label"]).to_numpy()
 
+train_x = np.asarray(train_x)
+train_y = np.asarray(train_y)
+
+
 validation_x = validation_data.drop(columns=["label"]).to_numpy()
 validation_y = validation_data["label"].to_numpy()
+
+validation_x = np.asarray(train_x)
+validation_y = np.asarray(train_y)
 
 
 class Neuron:
@@ -58,6 +65,7 @@ class Max_Pooling_Layer:
         self.s = stride
         self.mask = 0
         self.input = 0
+        self.out_shape = 0
 
     def forward(self, x):
         # x is (10, 10, 27, 27)
@@ -86,6 +94,8 @@ class Max_Pooling_Layer:
                     aj = 0
                 ai = 0
 
+        self.out_shape = out.shape[2:]  # (h_out, w_out)
+
         # print(out.shape)
 
         # for j in range(out.shape[0]):
@@ -104,19 +114,35 @@ class Max_Pooling_Layer:
         return out
 
     def backward(self, dl_dout):
-        # dl_dout is (b, c, h_out, w_out)
-        # mask is (b, c, h_in, w_in)
+        # dl_dout shape = (B, C, H_out, W_out)
+        # self.mask shape = (B, C, H_in, W_in)
 
-        # dl_dout_2 = np.expand_dims(dl_dout, axis=-1)
-        # dl_dout_2 = np.expand_dims(dl_dout_2, axis=-1)
+        B, C, H_out, W_out = dl_dout.shape
+        _, _, H_in, W_in = self.mask.shape
 
-        # dl_dout_2 = dl_dout.repeat(self.k, axis=-2).repeat(self.k, axis=-1) #(b, c, h, w, 2, 2)
+        dl_dout = np.repeat(np.repeat(dl_dout, 2, axis=2), 2, axis=3)
 
-        # dl_dout_2 = self.mask * dl_dout_2
+        if H_in % 2 != 0:
+            dl_dout = np.pad(
+                dl_dout,
+                ((0, 0), (0, 0), (0, 1), (0, 1)),
+                mode="constant",
+                constant_values=0,
+            )
 
-        dl_dout_expanded = dl_dout.repeat(self.k, axis=2).repeat(self.k, axis=3)
-        dl_dx = dl_dout_expanded * self.mask
+        # Crop mask to match only the area covered by pooling
+        # mask_cropped = self.mask[:, :, :H_in, :W_in]
 
+        # dl_dx = np.zeros_like(mask_cropped)
+
+        # for i in range(self.k):
+        #     for j in range(self.k):
+        #         dl_dx[:, :, i::self.k, j::self.k] = dl_dout * mask_cropped[:, :, i::self.k, j::self.k]
+
+        # return dl_dx
+
+        # print(dl_dout.shape, self.mask.shape)
+        dl_dx = self.mask * dl_dout
         return dl_dx
 
 
@@ -166,7 +192,7 @@ class Convulution_Layer:
         out = out.transpose(0, 2, 1)  # (b, c, n) (10, 10, 729)
         out = out.reshape(b, self.output_shape, out_h, out_w)  # (10, 10, 27, 27)
 
-        print(out.shape)
+        # print(out.shape)
 
         # for j in range(out.shape[0]):
         #     fig, axes = plt.subplots(5, 2, figsize=(6, 6))
@@ -205,7 +231,7 @@ class Convulution_Layer:
         dl_dx_col = dl_dout_flat @ self.weights  # (B, N, C*k*k)
 
         # Need to reconstruct dx from dx_col using col2im
-        dl_dx = np.zeros_like(self.input_real)
+        dl_dx = np.zeros_like(self.input_real, dtype=np.float64)
 
         idx = 0
         for i in range(0, out_H * s, s):
@@ -320,7 +346,7 @@ class CNNNeuralNet:
         mstride=2,
         image_size=28,
     ):
-        self.act = activation_fn
+        self.act = activation_fn(id=0)
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.learning_rate = learning_rate
@@ -331,6 +357,7 @@ class CNNNeuralNet:
             output_shape=filters,
             input_shape=input_shape,
         )
+        self.act1 = activation_fn(id=1)
         self.Layer2 = Max_Pooling_Layer(kernel=mkernel, stride=mstride)
         self.Layer3 = Convulution_Layer(
             kernel=kernel,
@@ -339,6 +366,7 @@ class CNNNeuralNet:
             output_shape=filters,
             input_shape=filters,
         )
+        self.act2 = activation_fn(id=2)
         self.Layer4 = Max_Pooling_Layer(kernel=mkernel, stride=mstride)
 
         shape = image_size
@@ -351,24 +379,26 @@ class CNNNeuralNet:
             input_shape=shape * shape * filters,
             output_shape=32,
         )
+        self.act3 = activation_fn(id=3)
         self.Layer6 = Linear_Layer(input_shape=32, output_shape=output_shape)
+        self.act4 = activation_fn(id=4)
         self.shape_before = 0
 
     def forward(self, x):
         y = self.Layer1.forward(x)  # conv
-        y = self.act.fn(y)  # ReLu
+        y = self.act1.fn(y)  # ReLu
         y = self.Layer2.forward(y)  # maxpool
         y = self.Layer3.forward(y)  # conv
-        y = self.act.fn(y)  # ReLu
+        y = self.act2.fn(y)  # ReLu
         y = self.Layer4.forward(y)  # maxpool
 
         self.shape_before = y.shape  # for backward
 
         y = y.reshape(y.shape[0], -1)
         y = self.Layer5.forward(y)  # Linear
-        y = self.act.fn(y)  # ReLu
+        y = self.act3.fn(y)  # ReLu
         y = self.Layer6.forward(y)  # Linear
-        y = self.act.fn(y)  # ReLu
+        y = self.act4.fn(y)  # ReLu
 
         y = Softmax(y)
         return y
@@ -378,19 +408,19 @@ class CNNNeuralNet:
             (y_preds - y_actual) / y_preds.shape[0]
         )  # (32x10)#dividing by batch size to get normalized loss (do not scale with batch_size) #softmax+cross-entropy
 
-        dl_dout = self.act.der(self.Layer6.input) * dl_dout
+        dl_dout = self.act4.der() * dl_dout
         dl_dout = self.Layer6.backward(dl_dout, self.learning_rate)
-        dl_dout = self.act.der(self.Layer5.input) * dl_dout
+        dl_dout = self.act3.der() * dl_dout
 
         dl_dout = self.Layer5.backward(dl_dout, self.learning_rate)
         dl_dout = dl_dout.reshape(self.shape_before)
 
         dl_dout = self.Layer4.backward(dl_dout)
-        dl_dout = self.act.der(self.Layer3.input) * dl_dout
+        dl_dout = self.act2.der() * dl_dout
 
         dl_dout = self.Layer3.backward(dl_dout, self.learning_rate)
         dl_dout = self.Layer2.backward(dl_dout)
-        dl_dout = self.act.der(dl_dout)
+        dl_dout = self.act1.der() * dl_dout
 
         dl_dout = self.Layer1.backward(dl_dout, self.learning_rate)
 
@@ -408,7 +438,8 @@ def Softmax(x):
 
 
 class ReLu:
-    def __init__(self):
+    def __init__(self, id):
+        self.id = id
         self.input = 0
 
     def fn(self, x):
@@ -514,7 +545,7 @@ validation_y_2 = modify_y(validation_y, 10)
 #     learning_rate=0.0001, activation_fn=Leaky_ReLu(0.01)
 # )  # 95% acc with leaky ReLu(0.01)
 
-model = CNNNeuralNet(learning_rate=0.0001, activation_fn=ReLu())
+model = CNNNeuralNet(learning_rate=0.0001, activation_fn=ReLu)
 # out = model.forward(train_x[0:10].reshape(10, 1, 28, 28))
 
 
@@ -543,6 +574,7 @@ for epoch in range(epochs):
         model.backpropogation(batches_y[i], y_preds)
         loss += Cross_Entropy_loss(y_preds, batches_y[i])
         acc += calculate_accuracy(y_preds, batches_y[i])
+        print(f"batch:{i}")
     loss = loss / len(batches_x)
     acc = acc / len(batches_x)
     y_preds2 = model.forward(validation_x)

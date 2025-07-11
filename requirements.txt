@@ -1,0 +1,12 @@
+numpy>=1.22
+matplotlib
+pandas
+scikit-learn
+
+# === CuPy (GPU acceleration) ===
+# Uncomment only ONE line below based on your CUDA version:
+cupy-cuda12x
+# cupy-cuda11x
+# cupy-cuda10x
+# cupy-cuda102
+# cupy-cuda111
