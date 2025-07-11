@@ -1,4 +1,4 @@
-import cupy as np
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
@@ -11,15 +11,8 @@ train_data, validation_data = train_test_split(train_data)
 train_y = train_data["label"].to_numpy()
 train_x = train_data.drop(columns=["label"]).to_numpy()
 
-train_x = np.asarray(train_x)
-train_y = np.asarray(train_y)
-
-
 validation_x = validation_data.drop(columns=["label"]).to_numpy()
 validation_y = validation_data["label"].to_numpy()
-
-validation_x = np.asarray(train_x)
-validation_y = np.asarray(train_y)
 
 
 class Neuron:
