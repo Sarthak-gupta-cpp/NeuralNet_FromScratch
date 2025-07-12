@@ -546,7 +546,7 @@ model = CNNNeuralNet(learning_rate=0.0001, activation_fn=ReLu)
 
 
 # training batch wise
-epochs = 10
+epochs = 100
 batch_size = 64
 
 batches_x = [
@@ -567,14 +567,14 @@ for epoch in range(epochs):
         model.backpropogation(batches_y[i], y_preds)
         loss += Cross_Entropy_loss(y_preds, batches_y[i])
         acc += calculate_accuracy(y_preds, batches_y[i])
-        print(f"batch:{i}")
     loss = loss / len(batches_x)
     acc = acc / len(batches_x)
     y_preds2 = model.forward(validation_x)
     acc2 = calculate_accuracy(y_preds2, validation_y_2)
-    print(
-        f"Epoch: {epoch} | Loss: {loss:.4f} | Train acc: {acc * 100:.2f}| Test acc: {acc2 * 100:.2f}"
-    )
+    if epoch % 5 == 0:
+        print(
+            f"Epoch: {epoch} | Loss: {loss:.4f} | Train acc: {acc * 100:.2f}| Test acc: {acc2 * 100:.2f}"
+        )
 
 
 # y_preds = model.forward(train_x)
